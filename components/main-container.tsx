@@ -17,6 +17,7 @@ export const MainContainer = () => {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Handle image upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
@@ -25,6 +26,7 @@ export const MainContainer = () => {
     }
   };
 
+  // Start camera stream
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -41,6 +43,7 @@ export const MainContainer = () => {
     }
   };
 
+  // Capture photo from the camera feed
   const handleTakePhoto = () => {
     if (videoRef.current) {
       const canvas = document.createElement("canvas");
@@ -67,6 +70,7 @@ export const MainContainer = () => {
     }
   };
 
+  // Analyze the uploaded or captured image
   const analyzeImage = async () => {
     if (!image) return;
 
@@ -87,7 +91,7 @@ export const MainContainer = () => {
         - Care recommendations
         - Health and disease diagnosis
         - Recommended season and weather for planting.
-        Format each heading as bold, in capital letters.
+        Format each heading as bold, in capital letters, and in green color.
         Provide related questions.`, 
         imageParts 
       ]);
@@ -114,6 +118,7 @@ export const MainContainer = () => {
     }
   };
 
+  // Convert image file to data for generative AI model
   const fileToGenerativePart = async (file: File): Promise<{
     inlineData: { data: string; mimeType: string };
   }> => {
@@ -134,6 +139,7 @@ export const MainContainer = () => {
     });
   };
 
+  // Extract plant properties from analysis result
   const extractPlantProperties = (text: string) => {
     const properties = text
       .split("\n")
@@ -142,6 +148,7 @@ export const MainContainer = () => {
     setPlantProperties(properties);
   };
 
+  // Extract related questions from analysis result
   const extractRelatedQuestions = (text: string): string[] => {
     const regex = /related question[s]?:\s*([\s\S]+?)(?:\n|$)/i;
     const match = text.match(regex);
@@ -151,10 +158,12 @@ export const MainContainer = () => {
     return [];
   };
 
+  // Handle clicking on related questions
   const askRelatedQuestion = (question: string) => {
     console.log(`User selected related question: ${question}`);
   };
 
+  // Download the analysis result as a PDF
   const downloadPDF = () => {
     if (!result) return;
 
@@ -236,7 +245,7 @@ export const MainContainer = () => {
           </button>
         </div>
 
-        {/* Displaying Analysis Results */}
+        {/* Display Analysis Result */}
         {result && (
           <div className="bg-green-50 p-8 border-t border-green-100">
             <h3 className="text-2xl font-bold text-green-800 mb-4">
@@ -247,6 +256,8 @@ export const MainContainer = () => {
                 <p key={index} className="mb-2">{line}</p>
               ))}
             </div>
+
+            {/* Plant Properties */}
             <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
               PLANT PROPERTIES
             </h4>
@@ -255,6 +266,8 @@ export const MainContainer = () => {
                 <li key={index} className="text-gray-700">{property}</li>
               ))}
             </ul>
+
+            {/* Related Questions */}
             {relatedQuestions.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-lg font-semibold mb-2 text-green-700">
@@ -275,6 +288,8 @@ export const MainContainer = () => {
                 </ul>
               </div>
             )}
+
+            {/* Download PDF */}
             <button
               type="button"
               onClick={downloadPDF}
