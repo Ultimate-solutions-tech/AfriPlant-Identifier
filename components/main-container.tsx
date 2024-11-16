@@ -2,35 +2,24 @@
 
 import React, { useState, useRef } from "react";
 import Image from "next/image";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { jsPDF } from "jspdf";
 
 export const MainContainer = () => {
   const [image, setImage] = useState<File | null>(null);
+  const [capturedImageURL, setCapturedImageURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
-  const [plantProperties, setPlantProperties] = useState<string[]>([]);
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
-
+  const [plantProperties, setPlantProperties] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Handle image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImage(e.target.files[0]);
-      setCapturedImageUrl(URL.createObjectURL(e.target.files[0]));
-    }
-  };
-
-  // Start camera stream
-  const startCamera = async () => {
+  const handleStartCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: { facingMode: "environment" }, // Use back camera
       });
-      setCameraStream(stream);
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
@@ -40,68 +29,114 @@ export const MainContainer = () => {
     }
   };
 
-  // Capture photo from the camera feed
-  const handleTakePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+  const handleCapturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
 
       if (context) {
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataURL = canvas.toDataURL("image/jpeg");
+        setCapturedImageURL(dataURL);
 
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
-            setImage(file);
-            setCapturedImageUrl(URL.createObjectURL(file));
-          }
-        });
+        // Convert data URL to File object
+        fetch(dataURL)
+          .then((res) => res.blob())
+          .then((blob) => {
+            setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
+          });
       }
-
-      cameraStream?.getTracks().forEach((track) => track.stop());
-      setCameraStream(null);
     }
   };
 
-  // Analyze the uploaded or captured image
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImage(e.target.files[0]);
+      setCapturedImageURL(URL.createObjectURL(e.target.files[0]));
+    }
+  };
+
   const analyzeImage = async () => {
     if (!image) return;
 
     setLoading(true);
+    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY!);
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+    });
+
     try {
-      // Simulated analysis result
-      const fakeResult =
-        "PLANT NAME: Aloe Vera\nSPECIES: Aloe barbadensis miller\nCARE RECOMMENDATIONS: Keep in sunlight, water sparingly\nHEALTH DIAGNOSIS: Healthy\nRECOMMENDED SEASON: Summer";
-      setResult(fakeResult);
+      const imageParts = await fileToGenerativePart(image);
+      const result = await model.generateContent([
+        `Generate details about this image including:
+        - Name
+        - Species
+        - Planting process
+        - Care recommendations
+        - Health and disease diagnosis
+        - Recommended season and weather for planting.
+        Include related questions.
+        Format each heading as bold, uppercase, and green.`,
+        imageParts,
+      ]);
 
-      // Extract plant properties from the result
-      const properties = fakeResult
-        .split("\n")
-        .filter((line) => line.includes(":"));
-      setPlantProperties(properties);
+      const response = await result.response;
+      const text = response
+        .text()
+        .trim()
+        .replace(/```/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/-\s*/g, "")
+        .replace(/\n\s*\n/g, "\n");
 
-      const fakeQuestions = [
-        "How to grow Aloe Vera?",
-        "What are the medicinal uses of Aloe Vera?",
-        "How to care for Aloe Vera in winter?",
-      ];
-      setRelatedQuestions(fakeQuestions);
+      setResult(text);
+      extractPlantProperties(text);
+      setRelatedQuestions(["What is the ideal soil?", "How to water this plant?", "Best season for planting?"]);
     } catch (error) {
-      console.error("Error analyzing image:", error);
+      console.log((error as Error)?.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Download the analysis result as a PDF
+  const fileToGenerativePart = async (file: File): Promise<{
+    inlineData: { data: string; mimeType: string };
+  }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Data = reader.result as string;
+        const base64Content = base64Data.split(",")[1];
+        resolve({
+          inlineData: {
+            data: base64Content,
+            mimeType: file.type,
+          },
+        });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const extractPlantProperties = (text: string) => {
+    const properties = text
+      .split("\n")
+      .filter((line) => line.includes(":")) // Look for lines with "Property: Value" structure
+      .slice(0, 5); // Limit to 5 key properties
+    setPlantProperties(properties);
+  };
+
   const downloadPDF = () => {
     if (!result) return;
 
     const doc = new jsPDF();
-    const lines = doc.splitTextToSize(result, 180);
-    doc.text(lines, 10, 10);
+    const lines = doc.splitTextToSize(result, 180); // width of 180 keeps text within margins
+    doc.text(lines, 10, 10); // Add the text with 10 units margin
     doc.save("plant-analysis.pdf");
   };
 
@@ -112,8 +147,6 @@ export const MainContainer = () => {
           <h2 className="text-3xl font-extrabold text-gray-900 mb-8 text-center">
             Analyze Your Plant
           </h2>
-          
-          {/* Image Upload Section */}
           <div className="mb-8">
             <label
               htmlFor="image-upload"
@@ -130,34 +163,29 @@ export const MainContainer = () => {
             />
           </div>
 
-          {/* Start Camera Button */}
           <button
             type="button"
-            onClick={startCamera}
+            onClick={handleStartCamera}
             className="w-full bg-green-500 text-white py-3 px-4 rounded-lg mb-4"
           >
             Start Camera
           </button>
+          <div className="mb-8">
+            <video ref={videoRef} className="w-full max-h-64 rounded-md mb-4"></video>
+            <canvas ref={canvasRef} className="hidden"></canvas>
+            <button
+              type="button"
+              onClick={handleCapturePhoto}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg"
+            >
+              Snap Image
+            </button>
+          </div>
 
-          {/* Real-Time Camera Feed */}
-          {cameraStream && (
-            <div className="mb-8 flex flex-col items-center">
-              <video ref={videoRef} className="rounded-lg shadow-md w-full h-auto" autoPlay />
-              <button
-                type="button"
-                onClick={handleTakePhoto}
-                className="bg-green-600 text-white py-3 px-4 rounded-lg mt-4"
-              >
-                Snap Photo
-              </button>
-            </div>
-          )}
-
-          {/* Display Captured Image */}
-          {capturedImageUrl && (
+          {capturedImageURL && (
             <div className="mb-8 flex justify-center">
               <Image
-                src={capturedImageUrl}
+                src={capturedImageURL}
                 alt="Captured Image"
                 width={300}
                 height={300}
@@ -166,7 +194,6 @@ export const MainContainer = () => {
             </div>
           )}
 
-          {/* Analyze Image Button */}
           <button
             type="button"
             onClick={analyzeImage}
@@ -177,33 +204,32 @@ export const MainContainer = () => {
           </button>
         </div>
 
-        {/* Display Analysis Result */}
         {result && (
           <div className="bg-green-50 p-8 border-t border-green-100">
             <h3 className="text-2xl font-bold text-green-800 mb-4">
-              IMAGE INFORMATION
+              Image Information
             </h3>
             <div className="text-gray-800 text-justify space-y-4">
               {result.split("\n").map((line, index) => (
-                <p key={index} className="mb-2">{line}</p>
+                <p key={index} className="mb-2">
+                  {line.startsWith("•") ? (
+                    <strong>{line.replace("•", "").trim()}</strong>
+                  ) : (
+                    line
+                  )}
+                </p>
               ))}
             </div>
-
-            {/* Plant Properties */}
-            {plantProperties.length > 0 && (
-              <div>
-                <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
-                  Plant Properties
-                </h4>
-                <ul className="space-y-2">
-                  {plantProperties.map((property, index) => (
-                    <li key={index} className="text-gray-700">{property}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Related Questions */}
+            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
+              Plant Properties
+            </h4>
+            <ul className="space-y-2">
+              {plantProperties.map((property, index) => (
+                <li key={index} className="text-gray-700">
+                  {property}
+                </li>
+              ))}
+            </ul>
             {relatedQuestions.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-lg font-semibold mb-2 text-green-700">
@@ -212,27 +238,23 @@ export const MainContainer = () => {
                 <ul className="space-y-2">
                   {relatedQuestions.map((question, index) => (
                     <li key={index}>
-                      <a
-                        href={`https://www.google.com/search?q=${encodeURIComponent(question)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-700 underline"
+                      <button
+                        type="button"
+                        onClick={() => alert(`Question: ${question}`)}
+                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-200 transition duration-150 ease-in-out"
                       >
                         {question}
-                      </a>
+                      </button>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-
-            {/* Download PDF */}
             <button
-              type="button"
               onClick={downloadPDF}
-              className="mt-6 w-full bg-blue-600 text-white py-3 px-4 rounded-lg"
+              className="mt-6 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
             >
-              Download PDF
+              Download as PDF
             </button>
           </div>
         )}
