@@ -64,7 +64,7 @@ export const MainContainer = () => {
 
             const imageParts = await fileToGenerativePart(image);
             const result = await model.generateContent([
-                `Generate details about this image, name, species, planting process, care recommendation, health, disease diagnosis. Format each subheading to be bold and in capital letter for easy readability. Also add additional information. Give the details in a simple african english style for a novice just starting farming in africa ${additionalPrompt}`,
+                `Generate details about this image, name, species, planting process, care recommendation, health, disease diagnosis. Also add the recommended season and weather for planting. Format each subheading to be bold and in capital letter for easy readability. Also add additional information. Give the details in a simple african english style for a novice just starting farming in africa ${additionalPrompt}`,
                 imageParts,
             ]);
 
