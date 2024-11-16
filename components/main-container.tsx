@@ -12,6 +12,7 @@ export const MainContainer = () => {
   const [result, setResult] = useState<string | null>(null);
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [plantProperties, setPlantProperties] = useState<string[]>([]);
+  const [cameraStarted, setCameraStarted] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -24,7 +25,8 @@ export const MainContainer = () => {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-      setCapturedImageURL(null); // Clear previous image
+      setCameraStarted(true);
+      setCapturedImageURL(null); // Clear any previous captured image
     } catch (error) {
       console.error("Camera access denied or unavailable:", error);
     }
@@ -42,7 +44,7 @@ export const MainContainer = () => {
         const dataURL = canvas.toDataURL("image/jpeg");
         setCapturedImageURL(dataURL);
 
-        // Stop camera after snapping photo
+        // Stop the camera after snapping a photo
         if (videoRef.current.srcObject) {
           const stream = videoRef.current.srcObject as MediaStream;
           stream.getTracks().forEach((track) => track.stop());
@@ -62,6 +64,7 @@ export const MainContainer = () => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
       setCapturedImageURL(URL.createObjectURL(e.target.files[0]));
+      setCameraStarted(true); // Allow image to be displayed when uploading
     }
   };
 
@@ -77,7 +80,7 @@ export const MainContainer = () => {
 
     try {
       const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([`Analyze this image and provide details.`, imageParts]);
+      const result = await model.generateContent([`Analyze this image and provide details on the Name, Species, Diagnosis, Health, Care, How to plants, suitable weather condition for planting and recommendations. Make the Subheading be in Capital Letter and Justify the content for easy readability.`, imageParts]);
 
       const response = await result.response;
       const text = response.text().trim();
@@ -94,6 +97,28 @@ export const MainContainer = () => {
       ]);
     } catch (error) {
       console.error("Error analyzing image:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRelatedQuestionClick = async (question: string) => {
+    setLoading(true);
+    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY!);
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+    });
+
+    try {
+      const result = await model.generateContent([`Answer the question: ${question}`]);
+
+      const response = await result.response;
+      const answer = response.text().trim();
+
+      alert(`Answer: ${answer}`); // Show answer in an alert
+    } catch (error) {
+      console.error("Error generating answer:", error);
     } finally {
       setLoading(false);
     }
@@ -134,11 +159,6 @@ export const MainContainer = () => {
     const lines = doc.splitTextToSize(result, 180);
     doc.text(lines, 10, 10);
     doc.save("plant-analysis.pdf");
-  };
-
-  const askRelatedQuestion = (question: string) => {
-    alert(`You clicked: ${question}`);
-    // Optionally, integrate this with further API calls.
   };
 
   return (
@@ -183,7 +203,7 @@ export const MainContainer = () => {
             </button>
           </div>
 
-          {capturedImageURL && (
+          {capturedImageURL && cameraStarted && (
             <div className="mb-8 flex justify-center">
               <Image
                 src={capturedImageURL}
@@ -229,7 +249,7 @@ export const MainContainer = () => {
                     <li key={index}>
                       <button
                         type="button"
-                        onClick={() => askRelatedQuestion(question)}
+                        onClick={() => handleRelatedQuestionClick(question)}
                         className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
                       >
                         {question}
