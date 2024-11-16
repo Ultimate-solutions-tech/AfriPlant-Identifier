@@ -13,6 +13,7 @@ export const MainContainer = () => {
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
+  const [isPhotoCaptured, setIsPhotoCaptured] = useState(false); // Track if a photo is taken
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -20,6 +21,7 @@ export const MainContainer = () => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
       setCapturedImageUrl(URL.createObjectURL(e.target.files[0]));
+      setIsPhotoCaptured(true); // Mark as photo captured for analysis
     }
   };
 
@@ -54,6 +56,7 @@ export const MainContainer = () => {
             const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
             setImage(file);
             setCapturedImageUrl(URL.createObjectURL(file)); // Display the captured image
+            setIsPhotoCaptured(true); // Mark photo as captured
           }
         });
       }
@@ -192,7 +195,7 @@ export const MainContainer = () => {
             Start Camera
           </button>
 
-          {cameraStream && (
+          {cameraStream && !isPhotoCaptured && (
             <div className="mb-8 flex flex-col items-center">
               <video ref={videoRef} className="rounded-lg shadow-md" autoPlay />
               <button
@@ -205,7 +208,7 @@ export const MainContainer = () => {
             </div>
           )}
 
-          {capturedImageUrl && (
+          {capturedImageUrl && isPhotoCaptured && (
             <div className="mb-8 flex justify-center">
               <Image
                 src={capturedImageUrl}
