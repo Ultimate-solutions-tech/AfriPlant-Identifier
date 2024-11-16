@@ -12,12 +12,14 @@ export const MainContainer = () => {
   const [plantProperties, setPlantProperties] = useState<string[]>([]);
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
+      setCapturedImageUrl(URL.createObjectURL(e.target.files[0]));
     }
   };
 
@@ -46,9 +48,12 @@ export const MainContainer = () => {
 
       if (context) {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
         canvas.toBlob((blob) => {
           if (blob) {
-            setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
+            const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
+            setImage(file);
+            setCapturedImageUrl(URL.createObjectURL(file)); // Display the captured image
           }
         });
       }
@@ -71,7 +76,7 @@ export const MainContainer = () => {
 
     try {
       const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([
+      const result = await model.generateContent([ 
         `Generate details about this image including:
         - Name
         - Species
@@ -80,8 +85,8 @@ export const MainContainer = () => {
         - Health and disease diagnosis
         - Recommended season and weather for planting.
         Format each heading as bold, in capital letters, and in green color.
-        Provide related questions.`,
-        imageParts,
+        Provide related questions.`, 
+        imageParts 
       ]);
 
       const response = await result.response;
@@ -145,7 +150,6 @@ export const MainContainer = () => {
 
   const askRelatedQuestion = (question: string) => {
     console.log(`User selected related question: ${question}`);
-    // Handle related question query here
   };
 
   const downloadPDF = () => {
@@ -189,23 +193,23 @@ export const MainContainer = () => {
           </button>
 
           {cameraStream && (
-            <div className="mb-8 flex justify-center">
+            <div className="mb-8 flex flex-col items-center">
               <video ref={videoRef} className="rounded-lg shadow-md" autoPlay />
               <button
                 type="button"
                 onClick={handleTakePhoto}
-                className="bg-green-600 text-white py-3 px-4 rounded-lg ml-4"
+                className="bg-green-600 text-white py-3 px-4 rounded-lg mt-4"
               >
                 Snap Photo
               </button>
             </div>
           )}
 
-          {image && (
+          {capturedImageUrl && (
             <div className="mb-8 flex justify-center">
               <Image
-                src={URL.createObjectURL(image)}
-                alt="Uploaded or Captured Image"
+                src={capturedImageUrl}
+                alt="Captured Image"
                 width={300}
                 height={300}
                 className="rounded-lg shadow-md"
@@ -262,10 +266,11 @@ export const MainContainer = () => {
               </div>
             )}
             <button
+              type="button"
               onClick={downloadPDF}
-              className="mt-6 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
+              className="mt-6 w-full bg-blue-600 text-white py-3 px-4 rounded-lg"
             >
-              Download as PDF
+              Download PDF
             </button>
           </div>
         )}
