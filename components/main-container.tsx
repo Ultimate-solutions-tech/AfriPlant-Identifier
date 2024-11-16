@@ -87,7 +87,7 @@ export const MainContainer = () => {
         - Care recommendations
         - Health and disease diagnosis
         - Recommended season and weather for planting.
-        Format each heading as bold, in capital letters, and in green color.
+        Format each heading as bold, in capital letters.
         Provide related questions.`, 
         imageParts 
       ]);
@@ -171,6 +171,8 @@ export const MainContainer = () => {
           <h2 className="text-3xl font-extrabold text-gray-900 mb-8 text-center">
             Analyze Your Plant
           </h2>
+          
+          {/* Image Upload Section */}
           <div className="mb-8">
             <label
               htmlFor="image-upload"
@@ -187,6 +189,7 @@ export const MainContainer = () => {
             />
           </div>
 
+          {/* Start Camera Button */}
           <button
             type="button"
             onClick={startCamera}
@@ -195,9 +198,10 @@ export const MainContainer = () => {
             Start Camera
           </button>
 
+          {/* Real-Time Camera Feed */}
           {cameraStream && !isPhotoCaptured && (
             <div className="mb-8 flex flex-col items-center">
-              <video ref={videoRef} className="rounded-lg shadow-md" autoPlay />
+              <video ref={videoRef} className="rounded-lg shadow-md w-full h-auto" autoPlay />
               <button
                 type="button"
                 onClick={handleTakePhoto}
@@ -208,6 +212,7 @@ export const MainContainer = () => {
             </div>
           )}
 
+          {/* Display Captured Image */}
           {capturedImageUrl && isPhotoCaptured && (
             <div className="mb-8 flex justify-center">
               <Image
@@ -220,6 +225,7 @@ export const MainContainer = () => {
             </div>
           )}
 
+          {/* Analyze Image Button */}
           <button
             type="button"
             onClick={analyzeImage}
@@ -230,6 +236,7 @@ export const MainContainer = () => {
           </button>
         </div>
 
+        {/* Displaying Analysis Results */}
         {result && (
           <div className="bg-green-50 p-8 border-t border-green-100">
             <h3 className="text-2xl font-bold text-green-800 mb-4">
