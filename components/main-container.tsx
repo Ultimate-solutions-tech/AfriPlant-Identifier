@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { jsPDF } from "jspdf";
@@ -10,8 +10,10 @@ export const MainContainer = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [plantProperties, setPlantProperties] = useState<string[]>([]);
-  const [relatedWords, setRelatedWords] = useState<string[]>([]);
+  const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -25,29 +27,34 @@ export const MainContainer = () => {
         video: { facingMode: "environment" },
       });
       setCameraStream(stream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
     } catch (error) {
       console.error("Camera access denied or unavailable:", error);
     }
   };
 
   const handleTakePhoto = () => {
-    if (cameraStream) {
-      const video = document.createElement("video");
-      video.srcObject = cameraStream;
-      video.play();
-
+    if (videoRef.current) {
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")?.drawImage(video, 0, 0);
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const context = canvas.getContext("2d");
 
-      canvas.toBlob((blob) => {
-        if (blob) {
-          setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
-        }
-      });
+      if (context) {
+        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
+          }
+        });
+      }
 
-      cameraStream.getTracks().forEach((track) => track.stop());
+      // Stop the camera stream after capturing the photo
+      cameraStream?.getTracks().forEach((track) => track.stop());
       setCameraStream(null);
     }
   };
@@ -71,9 +78,9 @@ export const MainContainer = () => {
         - Planting process
         - Care recommendations
         - Health and disease diagnosis
-        - Recommended season and weather for planting
-        - Related keywords for this image.
-        Format each heading as bold, capitalize, and use green font color for headings.`,
+        - Recommended season and weather for planting.
+        Format each heading as bold, in capital letters, and in green color.
+        Provide related questions.`,
         imageParts,
       ]);
 
@@ -89,7 +96,9 @@ export const MainContainer = () => {
 
       setResult(text);
       extractPlantProperties(text);
-      extractRelatedWords(text);
+
+      const relatedQs = extractRelatedQuestions(response.text());
+      setRelatedQuestions(relatedQs);
     } catch (error) {
       console.log((error as Error)?.message);
     } finally {
@@ -125,12 +134,18 @@ export const MainContainer = () => {
     setPlantProperties(properties);
   };
 
-  const extractRelatedWords = (text: string) => {
-    const lines = text.split("\n");
-    const keywordsLine = lines.find((line) => line.toLowerCase().includes("related keywords"));
-    if (keywordsLine) {
-      setRelatedWords(keywordsLine.split(":")[1].split(",").map((word) => word.trim()));
+  const extractRelatedQuestions = (text: string): string[] => {
+    const regex = /related question[s]?:\s*([\s\S]+?)(?:\n|$)/i;
+    const match = text.match(regex);
+    if (match && match[1]) {
+      return match[1].split("\n").map((q) => q.trim()).filter(Boolean);
     }
+    return [];
+  };
+
+  const askRelatedQuestion = (question: string) => {
+    console.log(`User selected related question: ${question}`);
+    // Handle related question query here
   };
 
   const downloadPDF = () => {
@@ -174,13 +189,16 @@ export const MainContainer = () => {
           </button>
 
           {cameraStream && (
-            <button
-              type="button"
-              onClick={handleTakePhoto}
-              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg mb-4"
-            >
-              Snap Photo
-            </button>
+            <div className="mb-8 flex justify-center">
+              <video ref={videoRef} className="rounded-lg shadow-md" autoPlay />
+              <button
+                type="button"
+                onClick={handleTakePhoto}
+                className="bg-green-600 text-white py-3 px-4 rounded-lg ml-4"
+              >
+                Snap Photo
+              </button>
+            </div>
           )}
 
           {image && (
@@ -208,39 +226,41 @@ export const MainContainer = () => {
         {result && (
           <div className="bg-green-50 p-8 border-t border-green-100">
             <h3 className="text-2xl font-bold text-green-800 mb-4">
-              Image Information
+              IMAGE INFORMATION
             </h3>
             <div className="text-gray-800 text-justify space-y-4">
               {result.split("\n").map((line, index) => (
-                <p key={index} className="mb-2">
-                  {line.startsWith("•") ? (
-                    <strong className="text-green-700 uppercase">{line.replace("•", "").trim()}</strong>
-                  ) : (
-                    line
-                  )}
-                </p>
+                <p key={index} className="mb-2">{line}</p>
               ))}
             </div>
             <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
-              Plant Properties
+              PLANT PROPERTIES
             </h4>
             <ul className="space-y-2">
               {plantProperties.map((property, index) => (
-                <li key={index} className="text-gray-700">
-                  {property}
-                </li>
+                <li key={index} className="text-gray-700">{property}</li>
               ))}
             </ul>
-            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
-              Related Words
-            </h4>
-            <ul className="space-y-2">
-              {relatedWords.map((word, index) => (
-                <li key={index} className="text-gray-700">
-                  {word}
-                </li>
-              ))}
-            </ul>
+            {relatedQuestions.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-lg font-semibold mb-2 text-green-700">
+                  Related Questions
+                </h4>
+                <ul className="space-y-2">
+                  {relatedQuestions.map((question, index) => (
+                    <li key={index}>
+                      <button
+                        type="button"
+                        onClick={() => askRelatedQuestion(question)}
+                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
+                      >
+                        {question}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button
               onClick={downloadPDF}
               className="mt-6 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
