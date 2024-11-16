@@ -2,7 +2,6 @@
 
 import React, { useState, useRef } from "react";
 import Image from "next/image";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { jsPDF } from "jspdf";
 
 export const MainContainer = () => {
@@ -13,7 +12,6 @@ export const MainContainer = () => {
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
-  const [isPhotoCaptured, setIsPhotoCaptured] = useState(false); // Track if a photo is taken
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -22,7 +20,6 @@ export const MainContainer = () => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
       setCapturedImageUrl(URL.createObjectURL(e.target.files[0]));
-      setIsPhotoCaptured(true); // Mark as photo captured for analysis
     }
   };
 
@@ -58,13 +55,11 @@ export const MainContainer = () => {
           if (blob) {
             const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
             setImage(file);
-            setCapturedImageUrl(URL.createObjectURL(file)); // Display the captured image
-            setIsPhotoCaptured(true); // Mark photo as captured
+            setCapturedImageUrl(URL.createObjectURL(file));
           }
         });
       }
 
-      // Stop the camera stream after capturing the photo
       cameraStream?.getTracks().forEach((track) => track.stop());
       setCameraStream(null);
     }
@@ -75,92 +70,29 @@ export const MainContainer = () => {
     if (!image) return;
 
     setLoading(true);
-    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY!);
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-    });
-
     try {
-      const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([ 
-        `Generate details about this image including:
-        - Name
-        - Species
-        - Planting process
-        - Care recommendations
-        - Health and disease diagnosis
-        - Recommended season and weather for planting.
-        Format each heading as bold, in capital letters, and in green color.
-        Provide related questions.`, 
-        imageParts 
-      ]);
+      // Simulated analysis result
+      const fakeResult =
+        "PLANT NAME: Aloe Vera\nSPECIES: Aloe barbadensis miller\nCARE RECOMMENDATIONS: Keep in sunlight, water sparingly\nHEALTH DIAGNOSIS: Healthy\nRECOMMENDED SEASON: Summer";
+      setResult(fakeResult);
 
-      const response = await result.response;
-      const text = response
-        .text()
-        .trim()
-        .replace(/```/g, "")
-        .replace(/\*\*/g, "")
-        .replace(/\*/g, "")
-        .replace(/-\s*/g, "")
-        .replace(/\n\s*\n/g, "\n");
+      // Extract plant properties from the result
+      const properties = fakeResult
+        .split("\n")
+        .filter((line) => line.includes(":"));
+      setPlantProperties(properties);
 
-      setResult(text);
-      extractPlantProperties(text);
-
-      const relatedQs = extractRelatedQuestions(response.text());
-      setRelatedQuestions(relatedQs);
+      const fakeQuestions = [
+        "How to grow Aloe Vera?",
+        "What are the medicinal uses of Aloe Vera?",
+        "How to care for Aloe Vera in winter?",
+      ];
+      setRelatedQuestions(fakeQuestions);
     } catch (error) {
-      console.log((error as Error)?.message);
+      console.error("Error analyzing image:", error);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Convert image file to data for generative AI model
-  const fileToGenerativePart = async (file: File): Promise<{
-    inlineData: { data: string; mimeType: string };
-  }> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64Data = reader.result as string;
-        const base64Content = base64Data.split(",")[1];
-        resolve({
-          inlineData: {
-            data: base64Content,
-            mimeType: file.type,
-          },
-        });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Extract plant properties from analysis result
-  const extractPlantProperties = (text: string) => {
-    const properties = text
-      .split("\n")
-      .filter((line) => line.includes(":"))
-      .slice(0, 5);
-    setPlantProperties(properties);
-  };
-
-  // Extract related questions from analysis result
-  const extractRelatedQuestions = (text: string): string[] => {
-    const regex = /related question[s]?:\s*([\s\S]+?)(?:\n|$)/i;
-    const match = text.match(regex);
-    if (match && match[1]) {
-      return match[1].split("\n").map((q) => q.trim()).filter(Boolean);
-    }
-    return [];
-  };
-
-  // Handle clicking on related questions
-  const askRelatedQuestion = (question: string) => {
-    console.log(`User selected related question: ${question}`);
   };
 
   // Download the analysis result as a PDF
@@ -208,7 +140,7 @@ export const MainContainer = () => {
           </button>
 
           {/* Real-Time Camera Feed */}
-          {cameraStream && !isPhotoCaptured && (
+          {cameraStream && (
             <div className="mb-8 flex flex-col items-center">
               <video ref={videoRef} className="rounded-lg shadow-md w-full h-auto" autoPlay />
               <button
@@ -222,7 +154,7 @@ export const MainContainer = () => {
           )}
 
           {/* Display Captured Image */}
-          {capturedImageUrl && isPhotoCaptured && (
+          {capturedImageUrl && (
             <div className="mb-8 flex justify-center">
               <Image
                 src={capturedImageUrl}
@@ -258,14 +190,18 @@ export const MainContainer = () => {
             </div>
 
             {/* Plant Properties */}
-            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
-              PLANT PROPERTIES
-            </h4>
-            <ul className="space-y-2">
-              {plantProperties.map((property, index) => (
-                <li key={index} className="text-gray-700">{property}</li>
-              ))}
-            </ul>
+            {plantProperties.length > 0 && (
+              <div>
+                <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
+                  Plant Properties
+                </h4>
+                <ul className="space-y-2">
+                  {plantProperties.map((property, index) => (
+                    <li key={index} className="text-gray-700">{property}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Related Questions */}
             {relatedQuestions.length > 0 && (
@@ -276,13 +212,14 @@ export const MainContainer = () => {
                 <ul className="space-y-2">
                   {relatedQuestions.map((question, index) => (
                     <li key={index}>
-                      <button
-                        type="button"
-                        onClick={() => askRelatedQuestion(question)}
-                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(question)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-700 underline"
                       >
                         {question}
-                      </button>
+                      </a>
                     </li>
                   ))}
                 </ul>

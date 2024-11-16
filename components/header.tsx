@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image";
-import Link from "next/link";
+// import Link from "next/link";
 import React from 'react'
 
 export const Header = () => {
@@ -21,7 +21,7 @@ export const Header = () => {
                     <h1 className="text-2xl font-bold text-green-600">AfriPlant Identifier</h1>
                 </div>
           {/* menus */}
-                <nav>
+                {/* <nav>
                     <ul className="flex space-x-4">
                         <Link href={"#"} className="text-green-600 hover:text-green-800 transition duration-150 ease-in-out">Home</Link>
 
@@ -29,7 +29,7 @@ export const Header = () => {
 
                         <Link href={"#features"} className="text-green-600 hover:text-green-800 transition duration-150 ease-in-out">Features</Link>
                     </ul>
-                </nav>
+                </nav> */}
             </div>
         </div>
     </header>
