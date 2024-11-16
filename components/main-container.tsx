@@ -10,6 +10,8 @@ export const MainContainer = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [plantProperties, setPlantProperties] = useState<string[]>([]);
+  const [relatedWords, setRelatedWords] = useState<string[]>([]);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -17,16 +19,22 @@ export const MainContainer = () => {
     }
   };
 
-  const handleTakePhoto = async () => {
+  const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // Use back camera
+        video: { facingMode: "environment" },
       });
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.play();
+      setCameraStream(stream);
+    } catch (error) {
+      console.error("Camera access denied or unavailable:", error);
+    }
+  };
 
-      await new Promise((resolve) => (video.onloadedmetadata = resolve));
+  const handleTakePhoto = () => {
+    if (cameraStream) {
+      const video = document.createElement("video");
+      video.srcObject = cameraStream;
+      video.play();
 
       const canvas = document.createElement("canvas");
       canvas.width = video.videoWidth;
@@ -34,12 +42,13 @@ export const MainContainer = () => {
       canvas.getContext("2d")?.drawImage(video, 0, 0);
 
       canvas.toBlob((blob) => {
-        if (blob) setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
+        if (blob) {
+          setImage(new File([blob], "captured-image.jpg", { type: "image/jpeg" }));
+        }
       });
 
-      stream.getTracks().forEach((track) => track.stop());
-    } catch (error) {
-      console.error("Camera access denied or unavailable:", error);
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
     }
   };
 
@@ -62,8 +71,9 @@ export const MainContainer = () => {
         - Planting process
         - Care recommendations
         - Health and disease diagnosis
-        - Recommended season and weather for planting.
-        Format each heading as bold and give clear, detailed content in African English.`,
+        - Recommended season and weather for planting
+        - Related keywords for this image.
+        Format each heading as bold, capitalize, and use green font color for headings.`,
         imageParts,
       ]);
 
@@ -79,6 +89,7 @@ export const MainContainer = () => {
 
       setResult(text);
       extractPlantProperties(text);
+      extractRelatedWords(text);
     } catch (error) {
       console.log((error as Error)?.message);
     } finally {
@@ -109,17 +120,25 @@ export const MainContainer = () => {
   const extractPlantProperties = (text: string) => {
     const properties = text
       .split("\n")
-      .filter((line) => line.includes(":")) // Look for lines with "Property: Value" structure
-      .slice(0, 5); // Limit to 5 key properties
+      .filter((line) => line.includes(":"))
+      .slice(0, 5);
     setPlantProperties(properties);
+  };
+
+  const extractRelatedWords = (text: string) => {
+    const lines = text.split("\n");
+    const keywordsLine = lines.find((line) => line.toLowerCase().includes("related keywords"));
+    if (keywordsLine) {
+      setRelatedWords(keywordsLine.split(":")[1].split(",").map((word) => word.trim()));
+    }
   };
 
   const downloadPDF = () => {
     if (!result) return;
 
     const doc = new jsPDF();
-    const lines = doc.splitTextToSize(result, 180); // width of 180 keeps text within margins
-    doc.text(lines, 10, 10); // Add the text with 10 units margin
+    const lines = doc.splitTextToSize(result, 180);
+    doc.text(lines, 10, 10);
     doc.save("plant-analysis.pdf");
   };
 
@@ -148,11 +167,21 @@ export const MainContainer = () => {
 
           <button
             type="button"
-            onClick={handleTakePhoto}
+            onClick={startCamera}
             className="w-full bg-green-500 text-white py-3 px-4 rounded-lg mb-4"
           >
-            Scan your Image
+            Start Camera
           </button>
+
+          {cameraStream && (
+            <button
+              type="button"
+              onClick={handleTakePhoto}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg mb-4"
+            >
+              Snap Photo
+            </button>
+          )}
 
           {image && (
             <div className="mb-8 flex justify-center">
@@ -185,7 +214,7 @@ export const MainContainer = () => {
               {result.split("\n").map((line, index) => (
                 <p key={index} className="mb-2">
                   {line.startsWith("•") ? (
-                    <strong>{line.replace("•", "").trim()}</strong>
+                    <strong className="text-green-700 uppercase">{line.replace("•", "").trim()}</strong>
                   ) : (
                     line
                   )}
@@ -199,6 +228,16 @@ export const MainContainer = () => {
               {plantProperties.map((property, index) => (
                 <li key={index} className="text-gray-700">
                   {property}
+                </li>
+              ))}
+            </ul>
+            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
+              Related Words
+            </h4>
+            <ul className="space-y-2">
+              {relatedWords.map((word, index) => (
+                <li key={index} className="text-gray-700">
+                  {word}
                 </li>
               ))}
             </ul>
