@@ -18,12 +18,13 @@ export const MainContainer = () => {
   const handleStartCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // Use back camera
+        video: { facingMode: "environment" },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
+      setCapturedImageURL(null); // Clear previous image
     } catch (error) {
       console.error("Camera access denied or unavailable:", error);
     }
@@ -40,6 +41,12 @@ export const MainContainer = () => {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataURL = canvas.toDataURL("image/jpeg");
         setCapturedImageURL(dataURL);
+
+        // Stop camera after snapping photo
+        if (videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach((track) => track.stop());
+        }
 
         // Convert data URL to File object
         fetch(dataURL)
@@ -70,34 +77,23 @@ export const MainContainer = () => {
 
     try {
       const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([
-        `Generate details about this image including:
-        - Name
-        - Species
-        - Planting process
-        - Care recommendations
-        - Health and disease diagnosis
-        - Recommended season and weather for planting.
-        Include related questions.
-        Format each heading as bold, uppercase, and green.`,
-        imageParts,
-      ]);
+      const result = await model.generateContent([`Analyze this image and provide details.`, imageParts]);
 
       const response = await result.response;
-      const text = response
-        .text()
-        .trim()
-        .replace(/```/g, "")
-        .replace(/\*\*/g, "")
-        .replace(/\*/g, "")
-        .replace(/-\s*/g, "")
-        .replace(/\n\s*\n/g, "\n");
+      const text = response.text().trim();
 
       setResult(text);
       extractPlantProperties(text);
-      setRelatedQuestions(["What is the ideal soil?", "How to water this plant?", "Best season for planting?"]);
+
+      // Generate related questions dynamically
+      setRelatedQuestions([
+        "What is the ideal soil type?",
+        "How often should it be watered?",
+        "What diseases affect this plant?",
+        "What are the ideal growing conditions?",
+      ]);
     } catch (error) {
-      console.log((error as Error)?.message);
+      console.error("Error analyzing image:", error);
     } finally {
       setLoading(false);
     }
@@ -126,8 +122,8 @@ export const MainContainer = () => {
   const extractPlantProperties = (text: string) => {
     const properties = text
       .split("\n")
-      .filter((line) => line.includes(":")) // Look for lines with "Property: Value" structure
-      .slice(0, 5); // Limit to 5 key properties
+      .filter((line) => line.includes(":"))
+      .slice(0, 5);
     setPlantProperties(properties);
   };
 
@@ -135,9 +131,14 @@ export const MainContainer = () => {
     if (!result) return;
 
     const doc = new jsPDF();
-    const lines = doc.splitTextToSize(result, 180); // width of 180 keeps text within margins
-    doc.text(lines, 10, 10); // Add the text with 10 units margin
+    const lines = doc.splitTextToSize(result, 180);
+    doc.text(lines, 10, 10);
     doc.save("plant-analysis.pdf");
+  };
+
+  const askRelatedQuestion = (question: string) => {
+    alert(`You clicked: ${question}`);
+    // Optionally, integrate this with further API calls.
   };
 
   return (
@@ -206,23 +207,13 @@ export const MainContainer = () => {
 
         {result && (
           <div className="bg-green-50 p-8 border-t border-green-100">
-            <h3 className="text-2xl font-bold text-green-800 mb-4">
-              Image Information
-            </h3>
+            <h3 className="text-2xl font-bold text-green-800 mb-4">Image Information</h3>
             <div className="text-gray-800 text-justify space-y-4">
               {result.split("\n").map((line, index) => (
-                <p key={index} className="mb-2">
-                  {line.startsWith("•") ? (
-                    <strong>{line.replace("•", "").trim()}</strong>
-                  ) : (
-                    line
-                  )}
-                </p>
+                <p key={index} className="mb-2">{line}</p>
               ))}
             </div>
-            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">
-              Plant Properties
-            </h4>
+            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">Plant Properties</h4>
             <ul className="space-y-2">
               {plantProperties.map((property, index) => (
                 <li key={index} className="text-gray-700">
@@ -232,16 +223,14 @@ export const MainContainer = () => {
             </ul>
             {relatedQuestions.length > 0 && (
               <div className="mt-6">
-                <h4 className="text-lg font-semibold mb-2 text-green-700">
-                  Related Questions
-                </h4>
+                <h4 className="text-lg font-semibold mb-2 text-green-700">Related Questions</h4>
                 <ul className="space-y-2">
                   {relatedQuestions.map((question, index) => (
                     <li key={index}>
                       <button
                         type="button"
-                        onClick={() => alert(`Question: ${question}`)}
-                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-200 transition duration-150 ease-in-out"
+                        onClick={() => askRelatedQuestion(question)}
+                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
                       >
                         {question}
                       </button>
