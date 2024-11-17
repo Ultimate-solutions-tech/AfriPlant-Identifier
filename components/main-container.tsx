@@ -43,6 +43,7 @@ export const MainContainer = () => {
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataURL = canvas.toDataURL("image/jpeg");
         setCapturedImageURL(dataURL);
+        setCameraStarted(false); // Hide camera area
 
         // Stop the camera after snapping a photo
         if (videoRef.current.srcObject) {
@@ -64,7 +65,7 @@ export const MainContainer = () => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
       setCapturedImageURL(URL.createObjectURL(e.target.files[0]));
-      setCameraStarted(true); // Allow image to be displayed when uploading
+      setCameraStarted(false); // Hide camera area
     }
   };
 
@@ -80,7 +81,7 @@ export const MainContainer = () => {
 
     try {
       const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([`Analyze this image and provide details on the Name, Species, Diagnosis, Health, Care, How to plants, suitable weather condition for planting and recommendations. Make the Subheading be in Capital Letter and Justify the content for easy readability.`, imageParts]);
+      const result = await model.generateContent([`Analyze this image and provide detailed information on its characteristics, type (weed or crop), and other plant-specific properties.`, imageParts]);
 
       const response = await result.response;
       const text = response.text().trim();
@@ -147,8 +148,7 @@ export const MainContainer = () => {
   const extractPlantProperties = (text: string) => {
     const properties = text
       .split("\n")
-      .filter((line) => line.includes(":"))
-      .slice(0, 5);
+      .filter((line) => line.includes(":") && (line.toLowerCase().includes("characteristics") || line.toLowerCase().includes("type")));
     setPlantProperties(properties);
   };
 
@@ -184,26 +184,31 @@ export const MainContainer = () => {
             />
           </div>
 
-          <button
-            type="button"
-            onClick={handleStartCamera}
-            className="w-full bg-green-500 text-white py-3 px-4 rounded-lg mb-4"
-          >
-            Start Camera
-          </button>
-          <div className="mb-8">
-            <video ref={videoRef} className="w-full max-h-64 rounded-md mb-4"></video>
-            <canvas ref={canvasRef} className="hidden"></canvas>
+          {!cameraStarted && (
             <button
               type="button"
-              onClick={handleCapturePhoto}
-              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg"
+              onClick={handleStartCamera}
+              className="w-full bg-green-500 text-white py-3 px-4 rounded-lg mb-4"
             >
-              Snap Image
+              Start Camera
             </button>
-          </div>
+          )}
 
-          {capturedImageURL && cameraStarted && (
+          {cameraStarted && (
+            <div className="mb-8">
+              <video ref={videoRef} className="w-full max-h-64 rounded-md mb-4"></video>
+              <canvas ref={canvasRef} className="hidden"></canvas>
+              <button
+                type="button"
+                onClick={handleCapturePhoto}
+                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg"
+              >
+                Snap Image
+              </button>
+            </div>
+          )}
+
+          {capturedImageURL && (
             <div className="mb-8 flex justify-center">
               <Image
                 src={capturedImageURL}
@@ -241,32 +246,37 @@ export const MainContainer = () => {
                 </li>
               ))}
             </ul>
-            {relatedQuestions.length > 0 && (
-              <div className="mt-6">
-                <h4 className="text-lg font-semibold mb-2 text-green-700">Related Questions</h4>
-                <ul className="space-y-2">
-                  {relatedQuestions.map((question, index) => (
-                    <li key={index}>
-                      <button
-                        type="button"
-                        onClick={() => handleRelatedQuestionClick(question)}
-                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
-                      >
-                        {question}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <button
-              onClick={downloadPDF}
-              className="mt-6 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
-            >
-              Download as PDF
-            </button>
           </div>
         )}
+
+        <div className="bg-green-50 p-8 border-t border-green-100">
+          <h3 className="text-xl font-bold text-green-800 mb-4">Related Questions</h3>
+          {relatedQuestions.length > 0 && (
+            <ul className="space-y-2">
+              {relatedQuestions.map((question, index) => (
+                <li key={index}>
+                  <button
+                    type="button"
+                    onClick={() => handleRelatedQuestionClick(question)}
+                    className="text-green-700 hover:text-green-900 underline"
+                  >
+                    {question}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-8">
+          <button
+            type="button"
+            onClick={downloadPDF}
+            className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg"
+          >
+            Download PDF
+          </button>
+        </div>
       </div>
     </main>
   );

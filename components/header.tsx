@@ -18,7 +18,7 @@ export const Header = () => {
                     height={40}
                     className="mr-3"
                     />
-                    <h1 className="text-2xl font-bold text-green-600">AfriPlant Identifier</h1>
+                    <a href="https://afriplantt-identifier.vercel.app"><h1 className="text-2xl font-bold text-green-600">AfriPlant Identifier</h1></a>
                 </div>
           {/* menus */}
                 {/* <nav>
