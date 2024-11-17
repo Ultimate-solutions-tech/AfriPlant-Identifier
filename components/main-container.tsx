@@ -11,7 +11,6 @@ export const MainContainer = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
-  const [plantProperties, setPlantProperties] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -80,23 +79,39 @@ export const MainContainer = () => {
 
     try {
       const imageParts = await fileToGenerativePart(image);
-      const result = await model.generateContent([`Analyze this image and provide details on the Name, Species, Diagnosis, Health, Care, How to plants, suitable weather condition for planting and recommendations. Make the Subheading be in Capital Letter and Justify the content for easy readability.`, imageParts]);
+      const result = await model.generateContent([
+        `Analyze this image and provide details on the type, characteristics, health status, care requirements, and ideal conditions for growth. Format the output clearly.`,
+        imageParts,
+      ]);
 
       const response = await result.response;
-      const text = response.text().trim();
+      const text = response
+        .text()
+        .trim()
+        .replace(/```/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/-\s*/g, "")
+        .replace(/\n\s*\n/g, "\n");
 
       setResult(text);
-      extractPlantProperties(text);
 
-      // Generate related questions dynamically
-      setRelatedQuestions([
-        "What is the ideal soil type?",
-        "How often should it be watered?",
-        "What diseases affect this plant?",
-        "What are the ideal growing conditions?",
+      // Generate five related questions dynamically
+      const relatedQuestionsResult = await model.generateContent([
+        `Based on the following analysis, generate 5 key questions that a plant enthusiast or gardener might ask:\n\n. Format the output clearly. ${text}`,
       ]);
+
+      const questionsResponse = await relatedQuestionsResult.response;
+      const questions = questionsResponse
+        .text()
+        .trim()
+        .split("\n")
+        .map((q) => q.replace(/^\d+\.\s*/, "").trim()) // Remove numbering if present
+        .slice(0, 5); // Ensure only 5 questions are included
+
+      setRelatedQuestions(questions);
     } catch (error) {
-      console.error("Error analyzing image:", error);
+      console.error("Error analyzing image or generating questions:", error);
     } finally {
       setLoading(false);
     }
@@ -111,12 +126,16 @@ export const MainContainer = () => {
     });
 
     try {
-      const result = await model.generateContent([`Answer the question: ${question}`]);
+      const result = await model.generateContent([`Answer the question based on the generated content: ${question}`]);
 
       const response = await result.response;
-      const answer = response.text().trim();
+      const answer = response.text().trim().replace(/```/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/-\s*/g, "")
+        .replace(/\n\s*\n/g, "\n");
 
-      alert(`Answer: ${answer}`); // Show answer in an alert
+      setResult(answer);
     } catch (error) {
       console.error("Error generating answer:", error);
     } finally {
@@ -142,15 +161,6 @@ export const MainContainer = () => {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-  };
-
-  const extractPlantProperties = (text: string) => {
-    // Example logic to extract properties related to types, characteristics, etc.
-    const properties = text
-      .split("\n")
-      .filter((line) => line.includes(":"))
-      .map((line) => line.trim());
-    setPlantProperties(properties);
   };
 
   const downloadPDF = () => {
@@ -190,18 +200,20 @@ export const MainContainer = () => {
             onClick={handleStartCamera}
             className="w-full bg-green-500 text-white py-3 px-4 rounded-lg mb-4"
           >
-            Start Camera
+            Scan Image
           </button>
           <div className="mb-8">
             <video ref={videoRef} className="w-full max-h-64 rounded-md mb-4"></video>
             <canvas ref={canvasRef} className="hidden"></canvas>
-            <button
-              type="button"
-              onClick={handleCapturePhoto}
-              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg"
-            >
-              Snap Image
-            </button>
+            {cameraStarted && (
+              <button
+                type="button"
+                onClick={handleCapturePhoto}
+                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg"
+              >
+                Snap Image
+              </button>
+            )}
           </div>
 
           {capturedImageURL && cameraStarted && (
@@ -234,14 +246,6 @@ export const MainContainer = () => {
                 <p key={index} className="mb-2">{line}</p>
               ))}
             </div>
-            <h4 className="text-lg font-semibold mt-6 mb-2 text-green-700">Plant Properties</h4>
-            <ul className="space-y-2">
-              {plantProperties.map((property, index) => (
-                <li key={index} className="text-gray-700">
-                  {property}
-                </li>
-              ))}
-            </ul>
             {relatedQuestions.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-lg font-semibold mb-2 text-green-700">Related Questions</h4>
@@ -251,7 +255,7 @@ export const MainContainer = () => {
                       <button
                         type="button"
                         onClick={() => handleRelatedQuestionClick(question)}
-                        className="text-left w-full bg-green-200 text-green-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-300 transition duration-150 ease-in-out"
+                        className="text-green-600 hover:text-green-800"
                       >
                         {question}
                       </button>
@@ -261,10 +265,11 @@ export const MainContainer = () => {
               </div>
             )}
             <button
+              type="button"
               onClick={downloadPDF}
-              className="mt-6 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg mt-4"
             >
-              Download as PDF
+              Download PDF
             </button>
           </div>
         )}
